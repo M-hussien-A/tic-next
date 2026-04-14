@@ -17,6 +17,15 @@ type Tab = "gainers" | "losers";
 const AUTO_REFRESH_MS = 60_000;
 const TOP_N = 15;
 
+interface DebugInfo {
+  rawEntryCount?: number;
+  marketsFound?: string[];
+  sampleKeys?: string[];
+  sampleEntryFields?: string[];
+  topLevelKeys?: string[];
+  upstreamBytes?: number;
+}
+
 export default function Dashboard({ token, username, onSignOut }: Props) {
   const [market, setMarket] = useState<MarketCode>(DEFAULT_MARKET);
   const [movers, setMovers] = useState<MarketMover[]>([]);
@@ -25,6 +34,7 @@ export default function Dashboard({ token, username, onSignOut }: Props) {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [tab, setTab] = useState<Tab>("gainers");
+  const [debug, setDebug] = useState<DebugInfo | null>(null);
   const inFlight = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -41,6 +51,7 @@ export default function Dashboard({ token, username, onSignOut }: Props) {
       const data = (await res.json()) as {
         movers?: MarketMover[];
         error?: string;
+        debug?: DebugInfo;
       };
       if (res.status === 401) {
         setError(data.error ?? "Session expired. Please sign in again.");
@@ -51,6 +62,7 @@ export default function Dashboard({ token, username, onSignOut }: Props) {
         throw new Error(data.error ?? `Request failed (${res.status})`);
       }
       setMovers(data.movers ?? []);
+      setDebug(data.debug ?? null);
       setLastRefresh(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
@@ -279,6 +291,56 @@ export default function Dashboard({ token, username, onSignOut }: Props) {
           {error && (
             <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
               {error}
+            </div>
+          )}
+
+          {!error && !loading && debug && movers.length === 0 && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-200 space-y-1">
+              <div className="font-semibold text-amber-300">
+                Upstream returned no rows for {market}.
+              </div>
+              <div>
+                Raw entries found: {debug.rawEntryCount ?? 0} · Response size:{" "}
+                {debug.upstreamBytes ?? 0} bytes
+              </div>
+              {debug.marketsFound && debug.marketsFound.length > 0 && (
+                <div>
+                  Markets in response:{" "}
+                  <span className="font-mono">
+                    {debug.marketsFound.join(", ")}
+                  </span>
+                </div>
+              )}
+              {debug.sampleKeys && debug.sampleKeys.length > 0 && (
+                <div>
+                  Sample keys:{" "}
+                  <span className="font-mono">
+                    {debug.sampleKeys.slice(0, 5).join(", ")}
+                  </span>
+                </div>
+              )}
+              {debug.sampleEntryFields &&
+                debug.sampleEntryFields.length > 0 && (
+                  <div>
+                    Sample entry fields:{" "}
+                    <span className="font-mono">
+                      {debug.sampleEntryFields.join(", ")}
+                    </span>
+                  </div>
+                )}
+              {debug.topLevelKeys && debug.topLevelKeys.length > 0 && (
+                <div>
+                  Top-level keys:{" "}
+                  <span className="font-mono">
+                    {debug.topLevelKeys.join(", ")}
+                  </span>
+                </div>
+              )}
+              <div className="pt-1 text-amber-300/70">
+                The markets listed above are what the upstream actually
+                returned — pick one from the dropdown. If the list is empty the
+                response shape is unrecognized.
+              </div>
             </div>
           )}
 
